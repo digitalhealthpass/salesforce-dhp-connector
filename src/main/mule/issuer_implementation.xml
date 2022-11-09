@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<flow name="implementation_issuerFlow" doc:id="9c739124-f477-4ebd-b725-50cc158fa50e" >
+		<salesforce:replay-channel-listener streamingChannel="/event/DHP_Outbound__e" replayOption="ONLY_NEW" doc:name="Replay channel listener" doc:id="7760a481-a787-47c5-baa0-c6bff847c424" config-ref="Salesforce_Config">
+			<reconnect />
+		</salesforce:replay-channel-listener>
+		<logger level="DEBUG" doc:name="Debug Salesforce event" doc:id="2c8c723d-bcd7-44b6-a296-2bcce41a372d" message="sf --- #[payload]"/>
+		<os:contains doc:name="check token still valid" doc:id="a7cd8f66-7ce6-49ad-8789-b4d6274a1d0e" key="issuer_token" objectStore="Object_store" target="check_token"/>
+		<choice doc:name="Choice" doc:id="7ea43de0-c2e3-45e6-9627-2ab68e5a10d5" >
+			<when expression="#[vars.check_token == true]">
+				<os:retrieve doc:name="Retrieve" doc:id="9faaea7c-a9c1-49b2-a2d2-d3bea5264337" key="issuer_token" target="token" objectStore="Object_store"/>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="4af95803-795a-4782-857e-eda14cccf799" name="implementation_getTokenFlow"/>
+				<os:retrieve doc:name="Retrieve" doc:id="d0a321cd-6a86-4565-856b-92c13c1831d1" key="issuer_token" objectStore="Object_store" target="token"/>
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="extract payload from SF event" doc:id="0635cc1b-b9d8-460f-9ac3-043de760cee7" >
+			<ee:message >
+				<ee:set-payload resource="dw/extract_payload_from_sf_event.dwl" />
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="record_Id" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.data.payload.RecordId__c
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="convert string to json" doc:id="e46d0508-3e37-4395-9658-f32edc2d774d">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+read(payload, "application/json")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Request credentials" doc:id="1269359b-61fd-486f-a279-f2036b4b356f" config-ref="HTTP_Request_configuration" path="/credentials">
+			<reconnect />
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"x-hpass-issuer-id" : p('hpass.issuerId'),
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+					<http:query-params><![CDATA[#[output application/java
+---
+{
+	"type" : "string"
+}]]]></http:query-params>
+				</http:request>
+		<logger level="DEBUG" doc:name="Debug DHP response" doc:id="99658beb-d652-42cf-9dea-b178e2d141ff" message="#[payload]"/>
+		<async doc:name="Async" doc:id="cc3a2b51-90a5-4641-afa4-a43334fcfd14" >
+			<flow-ref doc:name="Flow Reference" doc:id="72bc279d-406d-4e4a-a827-3e16989fe5e9" name="implementation_generateQRCodeFlow" />
+		</async>
+		<set-payload value='#[output text/plain --- "$(write(payload, "application/json"))"]' doc:name="Set Payload" doc:id="7fb8715d-750d-41e2-8ee3-54ad7190f524" />
+		<ee:transform doc:name="create dhpProof payload" doc:id="a55a0849-b8b5-4627-b46e-b6030784b2c6" >
+			<ee:message >
+				<ee:set-payload resource="dw/create_dhpProof_sf_event_payload.dwl" />
+			</ee:message>
+		</ee:transform>
+		<logger level="DEBUG" doc:name="Debug dhpProof payload" doc:id="dbe1ff3c-a5bb-439c-b3d2-3d7a84af7c76" message="#[payload]"/>
+		<salesforce:publish-platform-event-message platformEventName="DHP_Inbound__e" doc:name="Publish platform event message" doc:id="06c49822-ff37-4975-bb8d-67441abd69de" config-ref="Salesforce_Config">
+			<reconnect />
+		</salesforce:publish-platform-event-message>
+		<logger level="INFO" doc:name="Log salesforce response" doc:id="5761d758-7b5a-4322-b4c0-7da994b9ced8" message="#[output application/json --- payload]"/>
+	</flow>
+	<flow name="implementation_generateQRCodeFlow" doc:id="8560cbfd-0a0b-44a8-8112-f33cd643b478" >
+		<http:request method="POST" doc:name="Request QR code" doc:id="11990c83-a057-43e2-a445-58da88d766bc" config-ref="HTTP_Request_configuration" path="/qrcode/generate" >
+			<reconnect />
+			<http:body ><![CDATA[#[payload.payload]]]></http:body>
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"x-hpass-issuer-id" : p('hpass.issuerId'),
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+		</http:request>
+		<logger level="DEBUG" doc:name="Debug QR code payload" doc:id="516e7937-591c-4dfe-b5af-6bc74e76c3f7" message="#[payload]"/>
+		<ee:transform doc:name="image to base64" doc:id="2f990f89-f8d7-4c95-a91c-270f26c5ace8" >
+			<ee:message >
+				<ee:set-payload resource="dw/convert_image_to_base64.dwl" />
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="create QR code sf event" doc:id="567172b1-3097-44dc-9601-0edb54a5276f">
+			<ee:message>
+				<ee:set-payload resource="dw/create_qrCode_sf_event_payload.dwl" />
+			</ee:message>
+		</ee:transform>
+		<logger level="DEBUG" doc:name="Debug event payload" doc:id="c6c4a38e-7c45-48a8-bf41-2c8164614444" message="#[payload]"/>
+		<salesforce:publish-platform-event-message platformEventName="DHP_Inbound__e" doc:name="Publish platform event message" doc:id="b4531295-ec3b-471a-8388-adaa9234e1b0" config-ref="Salesforce_Config">
+			<reconnect />
+		</salesforce:publish-platform-event-message>
+		<logger level="INFO" doc:name="Log salesforce response" doc:id="6b547d4b-6b22-4620-91ec-6596aa61bd8a" message="#[output application/json --- payload]"/>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+	<flow name="implementation_getTokenFlow" doc:id="d5bea07a-42c0-4e1c-9318-2d23f8ecc3e8" >
+		<http:request method="POST" doc:name="Request token" doc:id="729df3e6-808f-4812-aaec-af88f526fdd4" config-ref="HTTP_Request_configuration" path="/users/login" target="access-token" targetValue="#[payload.access_token]">
+			<reconnect />
+			<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+    "email": "sftester@poc.com",
+    "password": "sftesting123"
+}]]]></http:body>
+		</http:request>
+		<os:store doc:name="Store" doc:id="386583ce-18a7-4d4d-ae30-02ecd4e4686c" key="issuer_token" objectStore="Object_store">
+			<os:value><![CDATA[#[vars."access-token"]]]></os:value>
+		</os:store>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+</mule>

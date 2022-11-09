@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="ecff00d7-72e5-4f92-8057-3d136ffe875e" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="348ca4ae-ae8b-4b9a-b7e6-f348386b38d0" basePath="${dhp.basePath}" >
+		<http:request-connection protocol="HTTPS" host="${dhp.host}" >
+			<reconnection >
+				<reconnect />
+			</reconnection>
+		</http:request-connection>
+	</http:request-config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="ac465228-d732-4b54-863c-8c9a4e81047d" entryTtlUnit="MINUTES" entryTtl="59"/>
+	<configuration-properties doc:name="Configuration properties" doc:id="cf0067aa-f6b2-4066-bea9-e80290ab025f" file="properties.yaml"/>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="712ef8c0-4565-4a8d-a1e9-467961cd60a2" >
+		<salesforce:basic-connection username="${salesforce.username}" password="${secure::salesforce.password}" securityToken="${secure::salesforce.security-token}" />
+	</salesforce:sfdc-config>
+	<salesforce:sfdc-config name="Verifier_Config" doc:name="Salesforce Config" doc:id="6f61298a-b3b9-4b5c-97d9-d4c6d0727c05" >
+		<salesforce:basic-connection username="${salesforce.issuer.newUsername}" password="${salesforce.issuer.newPassword}" securityToken="${salesforce.dhpb.token}"/>
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="9578a3e9-8a8b-4957-aa1e-66364dbca68e" file="Config\config-${env}.yaml" doc:description="config files"/>
+	<global-property doc:name="Global Property" doc:id="1bc7eed5-d475-4062-87ed-b40ee0ff7e0f" name="env" value="local" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="1fc496a9-b44d-4eb1-a946-78c5045b49f0" file="Config/config-secured-${env}.yaml" key="${secure-key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<configuration doc:name="Configuration" doc:id="2092a4ca-7379-455e-9690-3cef831dc06d" doc:description="error Handler" defaultErrorHandler-ref="errorsError_Handler" />	
+</mule>

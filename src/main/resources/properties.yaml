@@ -1,0 +1,6 @@
+dhp:
+  host: "dev1.wh-hpass.dev.acme.com"
+  basePath: "/api/v1/hpass"
+  
+hpass:
+  issuerId: "hpass.sfissuer1"

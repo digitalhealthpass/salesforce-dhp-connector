@@ -1,0 +1,42 @@
+{
+  "schemaID": "did:hpass:19b0cf0d5fc7017dd66ddd2374fbd9b796d988aced083d709abbaa0f7480b474:c4d1492e81bfcb951d028c0a4bd3c1edec16d32aed77a608c76ed917f3231f7e;id=vaccinationcard;version=0.2",
+  "expirationDate": "2022-04-01T12:00:00Z",
+  "data": {
+    "vaccineCode": "91300-0001A",
+    "vaccine": "Pfizer-Biontech Covid-19 Vaccine",
+    "type": "Vaccination Card",
+    "targetDisease": "Covid-19",
+    "subject": {
+      "phone": "1233211234",
+      "name": {
+        "given": "Tony",
+        "family": "Stark"
+      },
+      "identity": [
+        {
+          "value": "DL0987654321",
+          "type": "Driver's License Number",
+          "Sourcesystem": null
+        }
+      ],
+      "gender": "Male",
+      "email": "tony@starkindustries.com",
+      "birthDate": "2000-04-07",
+      "address": "System.Address[getCity=Los Angeles;getCountry=USA;getCountryCode=null;getGeocodeAccuracy=null;getPostalCode=12345;getState=CA;getStateCode=null;getStreet=123 Street;]"
+    },
+    "status": "in-progress",
+    "occurrenceDateTime": "2021-04-01",
+    "manufacturer": "Pfizer",
+    "lotNumber": "Pfizer",
+    "history": [
+      {
+        "vaccineCode": "VC4567",
+        "vaccine": "Pfizer-Biontech Covid-19 Vaccine",
+        "occurrenceDateTime": "2021-04-04",
+        "manufacturer": "Pfizer",
+        "lotNumber": "LNABC123"
+      }
+    ],
+    "display": "grey"
+  }
+}

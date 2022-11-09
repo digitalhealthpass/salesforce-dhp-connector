@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+	xmlns:java="http://www.mulesoft.org/schema/mule/java"
+	xmlns:crypto="http://www.mulesoft.org/schema/mule/crypto" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:xml-module="http://www.mulesoft.org/schema/mule/xml-module" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/xml-module http://www.mulesoft.org/schema/mule/xml-module/current/mule-xml-module.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/crypto http://www.mulesoft.org/schema/mule/crypto/current/mule-crypto.xsd
+http://www.mulesoft.org/schema/mule/java http://www.mulesoft.org/schema/mule/java/current/mule-java.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<flow name="verifier-implementationFlow" doc:id="2af74015-978a-4250-9440-1a3ca025fbd4" >
+		<salesforce:replay-channel-listener doc:name="Replay channel listener" doc:id="c1774a43-895b-4ef5-a7ea-666b74b00480" config-ref="Verifier_Config" streamingChannel="/event/DHP_Verify_Outbound__e" replayOption="ONLY_NEW">
+			<reconnect />
+		</salesforce:replay-channel-listener>
+		<logger level="DEBUG" doc:name="Debug SF event" doc:id="56ed942a-6e73-4bf9-8956-580ea350ea5b" message="#[payload]"/>
+		<os:contains doc:name="Contains" doc:id="da9b215b-cae1-41ab-a415-2042a11a3f3c" objectStore="Object_store" key="verifier_token" target="check_token"/>
+		<choice doc:name="Choice" doc:id="fca1214d-45db-4262-926e-75d3ebdbe51e" >
+			<when expression="#[vars.check_token == true]">
+				<os:retrieve doc:name="Retrieve" doc:id="42c0fcc8-a38d-4e38-a926-265b28e571cd" key="verifier_token" objectStore="Object_store" target="token"/>
+			
+</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="4d04c2f5-b340-4d47-95ae-df2babae9623" name="verifier_tokenImplementationFlow"/>
+				<os:retrieve doc:name="Retrieve" doc:id="dc874eaf-7adb-4153-a9de-2116c7564a86" key="verifier_token" objectStore="Object_store" target="token" />
+			
+</otherwise>
+		</choice>
+		<ee:transform doc:name="extract payload from SF event" doc:id="6e5facf5-8ba0-407c-92d7-2bcdc80f8b4d" >
+			<ee:message >
+				<ee:set-payload resource="dw/extract_payload_from_sf_event.dwl" />
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="record_Id" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.data.payload.RecordId__c
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="075e8bee-075e-41d1-8461-09682ed60fa7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+read(payload, "application/json")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="DEBUG" doc:name="Debug" doc:id="6cf361a4-922c-4c1f-b4b2-faff595c9388" message="#[payload]"/>
+		<ee:transform doc:name="set variables" doc:id="2ec3126d-3294-4bc8-98ad-c9f5fb5ece1f" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="sigValue" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.proof.signatureValue]]></ee:set-variable>
+				<ee:set-variable variableName="normalizePayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload - "proof"  ++ 
+{ 
+	"proof" :  payload."proof" - "signatureValue" 
+}]]></ee:set-variable>
+				<ee:set-variable variableName="actualpayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<http:request method="GET" doc:name="get Issuer Info" doc:id="1fd0da20-1f92-4d4c-be3e-bd7ae7026fe0" config-ref="HTTP_Request_configuration" path="/issuers/{issuer-did}" target="issuer_info" targetValue="#[payload.payload]">
+			<reconnect />
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"x-hpass-issuer-id" : p('hpass.issuerId'),
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+				<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"issuer-did" : payload.issuer
+}]]]></http:uri-params>
+		</http:request>
+		<logger level="DEBUG" doc:name="Debug Issuer Info" doc:id="2c26cabc-0821-480c-95ef-ef723982a796" message="#[payload]" />
+		<ee:transform doc:name="filter jwkKey" doc:id="ad736cff-1f88-44da-b2ed-4acd8db4fb35" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="jwkKey" ><![CDATA[%dw 2.0
+output application/json
+---
+vars."issuer_info".publicKey filter $.id == vars.actualPayload.proof.creator]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Validate public Keys and expiration date" doc:id="77da18e4-0ca8-4d55-8818-a1ddcf02da12">
+			<ee:message>
+			
+</ee:message>
+				<ee:variables>
+				<ee:set-variable resource="dw/publicKey_expirationDate_validation.dwl" variableName="expiration_Check" />
+				</ee:variables>
+		
+</ee:transform>
+		<choice doc:name="Choice" doc:id="eb40fa05-17c5-44d6-8c65-0b955db76d41">
+			<when expression="#[vars.expiration_Check == true]">
+				<set-payload value="#[vars.normalizePayload]" doc:name="to String" doc:id="a071a97d-fbe6-407b-93ab-ce127a0c9b91" mimeType="text/plain" />
+				<flow-ref doc:name="orderJson" doc:id="5bad6076-4969-4a1d-9a6d-361934efe5ba" name="sort_Json_By_Keys_JavaFlow" target="sortedPayload"/>
+				<flow-ref doc:name="decode PublicKey" doc:id="b6b552ee-b738-4cf5-97f7-87c93ba06cca" name="decode_PublicKey_JavaFlow" target="decodedPubKey" />
+				<flow-ref doc:name="signatureVerifiation" doc:id="3417d7bc-b563-4424-b218-15f1962a94bd" name="signature_verificationFlow"/>
+			</when>
+			<otherwise >
+				<logger level="DEBUG" doc:name="Debug" doc:id="dff222ec-5854-4423-8fbb-3036b65b7a21" message="#[payload]"/>
+			</otherwise>
+		</choice>
+			<choice doc:name="Choice" doc:id="7a987edf-8844-4cec-9f8a-02a7211714e4" >
+			<when expression="#[payload == true]">
+				<flow-ref doc:name="Flow Reference" doc:id="87da545e-b332-45c2-a7fd-d697d6439702" name="revocation_checkFlow"/>
+				<ee:transform doc:name="create platform event" doc:id="9b09da3b-d33b-4bed-9ea9-d95efbe23673">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[{
+	"Status__c": if(payload == true) "Revoked" else "Verified",
+	"RecordId__c": vars.record_Id
+}]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="create Platform event" doc:id="5bc499cf-d263-4c4b-9fe6-c2c95cac21e8" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+[{
+	"Status__c": if(vars.expiration_Check == true) "Rejected" else "Expired",
+	"RecordId__c": vars.record_Id
+}]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<logger level="DEBUG" doc:name="Debug SF Payload" doc:id="fbad4908-08ac-4c26-a3c2-88dbdc47ca4d" message="#[payload]"/>
+		<salesforce:publish-platform-event-message doc:name="Publish platform event message" doc:id="d7af3044-a6f8-4bba-ac57-2700ad60cb4d" config-ref="Verifier_Config" platformEventName="DHP_Verify_Inbound__e">
+			<reconnect />
+		</salesforce:publish-platform-event-message>
+		<ee:transform doc:name="Transform Message" doc:id="44fd9c83-6095-40a6-9e55-f58079104f76" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Salesforce Response" doc:id="bca3c02b-a38d-4d50-babd-ccabc6ada48b" message="#[payload]"/>
+		<error-handler ref="errorsError_Handler" />
+	
+
+</flow>
+	<flow name="revocation_checkFlow" doc:id="876893d7-1c87-46e6-a232-25de766189ea" >
+		<ee:transform doc:name="Transform Message" doc:id="40e9afeb-349d-4ce1-91fb-bb3698884916" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+vars.actualPayload.id replace "#" with("%23")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="GET" doc:name="Revocation check" doc:id="533a9fdc-fb5d-4ced-97bd-e581ac2cd175" config-ref="HTTP_Request_configuration" path="/credentials/{credential_id}/revoke_status/optional">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"x-hpass-issuer-id" : p('hpass.issuerId'),
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"credential_id" : payload
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="extract revocation status" doc:id="415eb693-4642-46c3-953e-f42b5816a76b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.payload.exists]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+	<flow name="decode_PublicKey_JavaFlow" doc:id="9577adca-e879-4498-bec8-a968c90130b2" >
+		<set-payload value="#[vars.jwkKey.publicKeyJwk[0]]" doc:name="to String" doc:id="a1c7afc8-d3fc-4ac1-8abc-30aa28351f0a" mimeType="text/plain" />
+		<java:new doc:name="Instantiate verify Class" doc:id="5bc5886c-1578-44fb-8b02-430e65d0f8b3" class="Verify" constructor="Verify()" target="instance"/>
+		<java:invoke doc:name="decode PubKey" doc:id="12287905-e165-4dda-8650-c7e3fcf15b40" instance="#[vars.instance]" class="Verify" method="decodePubKey(String)">
+			<java:args ><![CDATA[#[{"arg0":payload}]]]></java:args>
+		</java:invoke>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+	<flow name="sort_Json_By_Keys_JavaFlow" doc:id="3bafc376-5b91-403f-99b4-c7f8a0c4399f" >
+		<java:new constructor="orderJson()" doc:name="Instantiate orderJson class" doc:id="4f1d8b5d-fc45-4f51-9f71-c08622735dc0" class="orderJson" target="jsonInstance" />
+		<java:invoke method="getData(String)" doc:name="Sort JSON aplhabetically" doc:id="f5963374-3f9c-4736-85bd-3642192586ce" instance="#[vars.jsonInstance]" class="orderJson" >
+			<java:args ><![CDATA[#[{"arg0":payload}]]]></java:args>
+		</java:invoke>
+		<set-payload value="#[payload]" doc:name="to String" doc:id="a47f94c7-7f72-4b92-b17d-d0305e926d68" mimeType="text/plain"/>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+	<flow name="signature_verificationFlow" doc:id="cd968305-9d00-42a8-82c8-dd617c30e1e2" >
+		<java:new doc:name="Instantiate Verify Class" doc:id="84899322-e299-4a0b-97c3-cd1f8c2e0a49" class="Verify" constructor="Verify()" target="verifyInstance"/>
+		<java:invoke doc:name="verify Signature" doc:id="998ab470-3362-4703-bb34-70dc3949cd31" class="Verify" method="verifySignature(PublicKey, String, String)" instance="#[vars.verifyInstance]">
+			<java:args ><![CDATA[#[{"arg0":vars.decodedPubKey, "arg1":vars.sortedPayload, "arg2":vars.sigValue}]]]></java:args>
+		</java:invoke>
+		<error-handler ref="errorsError_Handler" />
+	</flow>
+	<flow name="verifier_tokenImplementationFlow" doc:id="a98a0c25-78f3-49e7-af4c-2014a1179b7e" >
+		<http:request method="POST" doc:name="Verifier Token Request" doc:id="ec03fa5f-1868-4d41-9bf1-927c8476e20f" config-ref="HTTP_Request_configuration" path="/users/loginWithCredential">
+			<reconnect />
+			<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+    "credential": p('dhp.credential')
+}]]]></http:body>
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+		</http:request>
+		<os:store doc:name="Store" doc:id="8703539b-57d9-4959-bb92-3d62cd78e754" key="verifier_token" objectStore="Object_store">
+			<os:value ><![CDATA[#[payload.access_token]]]></os:value>
+		</os:store>
+	</flow>
+
+</mule>
